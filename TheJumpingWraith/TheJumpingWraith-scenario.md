@@ -70,6 +70,23 @@ Primary user experience intent:
 - 2.mp3 (detection music)
 - 3.mp3 (scare music)
 
+### Arduino IDE Library Prerequisites
+- This scenario's `.ino` build depends on `DFRobotDFPlayerMini.h`.
+- `SoftwareSerial` is provided by Arduino AVR core and should be available when UNO board support is installed.
+
+Required setup before compile/upload:
+1. In Arduino IDE, open `Sketch -> Include Library -> Manage Libraries...`.
+2. Search for `DFRobotDFPlayerMini`.
+3. Install `DFRobotDFPlayerMini` by DFRobot.
+4. Set board to `Tools -> Board -> Arduino AVR Boards -> Arduino Uno`.
+5. Re-compile the sketch.
+
+If compile still fails:
+1. Confirm include line is exactly `#include <DFRobotDFPlayerMini.h>`.
+2. Restart Arduino IDE after library install.
+3. Remove duplicate old copies of DFPlayer libraries from Arduino libraries folder.
+4. If Library Manager cannot find it, install from ZIP via `Sketch -> Include Library -> Add .ZIP Library...`.
+
 ---
 
 ## 3. Phase Definitions
