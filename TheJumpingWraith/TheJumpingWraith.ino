@@ -51,7 +51,15 @@ const uint16_t TRACK_SCARE = 3;
 const unsigned long DETECTION_TIMEOUT_MS = 20000UL;
 const unsigned long SCARE_START_DELAY_MS = 1000UL;
 const unsigned long PISTON_ON_MS = 5000UL;
-const unsigned long LIGHT_ON_MS = 20000UL;
+const unsigned long LIGHT_ON_MS = 10000UL;
+
+// Startup self-test settings
+const bool PRODUCTION_MODE = true;
+const bool RUN_STARTUP_SELF_TEST = true;
+const unsigned long PIR_SELF_TEST_TIMEOUT_MS = 8000UL;
+const unsigned int SELF_TEST_RELAY_STEP_MS = 150;
+const unsigned int STATUS_BLINK_ON_MS = 180;
+const unsigned int STATUS_BLINK_OFF_MS = 180;
 
 // -------- Runtime --------
 SoftwareSerial mp3Serial(MP3_RX_PIN, MP3_TX_PIN);
@@ -76,6 +84,7 @@ bool lightEnded = false;
 
 bool prevDetectionPir = false;
 bool prevScarePir = false;
+bool mp3Ready = false;
 
 // -------- Logging --------
 void logMsg(const __FlashStringHelper* tag, const __FlashStringHelper* msg) {
@@ -119,6 +128,120 @@ void allRelaysOff() {
   if (!PISTON_USE_GROUND_SWITCH_RELAY) {
     setRelay(UNUSED_RELAY_PIN, false, F("UnusedRelay"));
   }
+}
+
+void blinkStatusLed(uint8_t blinkCount) {
+  for (uint8_t i = 0; i < blinkCount; i++) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(STATUS_BLINK_ON_MS);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(STATUS_BLINK_OFF_MS);
+  }
+}
+
+bool testRelayOutput(uint8_t pin, const __FlashStringHelper* relayName) {
+  setRelay(pin, true, relayName);
+  delay(SELF_TEST_RELAY_STEP_MS);
+  uint8_t onLevel = digitalRead(pin);
+  bool onOk = (onLevel == relayLevel(true));
+
+  setRelay(pin, false, relayName);
+  delay(SELF_TEST_RELAY_STEP_MS);
+  uint8_t offLevel = digitalRead(pin);
+  bool offOk = (offLevel == relayLevel(false));
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[SELFTEST] Relay "));
+    Serial.print(relayName);
+    Serial.print(F(" command path -> "));
+    Serial.println((onOk && offOk) ? F("PASS") : F("FAIL"));
+  }
+
+  return onOk && offOk;
+}
+
+bool waitForPirTrigger(uint8_t pin, const __FlashStringHelper* pirName, unsigned long timeoutMs) {
+  bool prev = (digitalRead(pin) == HIGH);
+  unsigned long start = millis();
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[SELFTEST] Trigger "));
+    Serial.print(pirName);
+    Serial.print(F(" within "));
+    Serial.print(timeoutMs);
+    Serial.println(F("ms"));
+  }
+
+  while ((millis() - start) < timeoutMs) {
+    bool curr = (digitalRead(pin) == HIGH);
+    if (!prev && curr) {
+      if (DEBUG_ENABLED) {
+        Serial.print(F("[SELFTEST] "));
+        Serial.print(pirName);
+        Serial.println(F(" trigger PASS"));
+      }
+      return true;
+    }
+    prev = curr;
+  }
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[SELFTEST] "));
+    Serial.print(pirName);
+    Serial.println(F(" trigger FAIL (timeout)"));
+  }
+  return false;
+}
+
+bool runStartupSelfTest() {
+  if (DEBUG_ENABLED) {
+    Serial.println(F("[SELFTEST] Starting startup hardware test"));
+    Serial.print(F("[SELFTEST] Mode -> "));
+    Serial.println(PRODUCTION_MODE ? F("PRODUCTION") : F("BENCH"));
+    Serial.println(F("[SELFTEST] Note: relay contact/load wiring has no electrical feedback path in this design"));
+  }
+
+  bool relayOk = true;
+  relayOk = testRelayOutput(PISTON_RELAY_PIN, F("PistonRelay")) && relayOk;
+  relayOk = testRelayOutput(EYES_RELAY_PIN, F("EyesRelay")) && relayOk;
+  relayOk = testRelayOutput(LIGHT_RELAY_PIN, F("LightRelay")) && relayOk;
+
+  if (PISTON_USE_GROUND_SWITCH_RELAY) {
+    relayOk = testRelayOutput(UNUSED_RELAY_PIN, F("PistonGroundSwitchRelay")) && relayOk;
+  } else {
+    relayOk = testRelayOutput(UNUSED_RELAY_PIN, F("UnusedRelay")) && relayOk;
+  }
+
+  bool pirDetectionOk = true;
+  bool pirScareOk = true;
+  bool pirOk = true;
+
+  if (PRODUCTION_MODE) {
+    if (DEBUG_ENABLED) {
+      Serial.println(F("[SELFTEST] PIR validation skipped in PRODUCTION mode"));
+    }
+  } else {
+    pirDetectionOk = waitForPirTrigger(DETECTION_PIR_PIN, F("DetectionPIR"), PIR_SELF_TEST_TIMEOUT_MS);
+    pirScareOk = waitForPirTrigger(SCARE_PIR_PIN, F("ScarePIR"), PIR_SELF_TEST_TIMEOUT_MS);
+    pirOk = pirDetectionOk && pirScareOk;
+  }
+
+  bool overallOk = relayOk && pirOk && mp3Ready;
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[SELFTEST] MP3 init -> "));
+    Serial.println(mp3Ready ? F("PASS") : F("FAIL"));
+    Serial.print(F("[SELFTEST] Relay command path -> "));
+    Serial.println(relayOk ? F("PASS") : F("FAIL"));
+    Serial.print(F("[SELFTEST] PIR validation -> "));
+    Serial.println(pirOk ? F("PASS") : F("FAIL"));
+    Serial.print(F("[SELFTEST] Overall result -> "));
+    Serial.println(overallOk ? F("PASS") : F("FAIL"));
+  }
+
+  blinkStatusLed(overallOk ? 3 : 5);
+  allRelaysOff();
+  return overallOk;
 }
 
 // -------- MP3 helpers --------
@@ -273,15 +396,26 @@ void setup() {
   pinMode(PISTON_RELAY_PIN, OUTPUT);
   pinMode(LIGHT_RELAY_PIN, OUTPUT);
   pinMode(UNUSED_RELAY_PIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
 
   allRelaysOff();
 
   mp3Serial.begin(9600);
   if (!mp3.begin(mp3Serial)) {
+    mp3Ready = false;
     logMsg(F("[MP3]"), F("DFPlayer init failed; check wiring/module"));
   } else {
+    mp3Ready = true;
     mp3.volume(MP3_VOLUME);
     logMsg(F("[MP3]"), F("DFPlayer ready"));
+  }
+
+  if (RUN_STARTUP_SELF_TEST) {
+    bool selfTestOk = runStartupSelfTest();
+    if (DEBUG_ENABLED && !selfTestOk) {
+      Serial.println(F("[SELFTEST] Startup test failed; system continues for diagnostics"));
+    }
   }
 
   prevDetectionPir = isPirActive(DETECTION_PIR_PIN);

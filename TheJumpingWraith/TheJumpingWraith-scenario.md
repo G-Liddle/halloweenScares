@@ -30,7 +30,7 @@ Primary user experience intent:
 ### Relay Outputs
 - EyesRelay: held ON during detection phase
 - PistonRelay: pulsed ON for 5 seconds during scare phase after delay
-- LightRelay: held ON for 20 seconds during scare phase after delay
+- LightRelay: held ON for 10 seconds during scare phase after delay
 - UnusedRelay: reserved, no behavior assigned in this scenario
 
 ### Prop Relay Contact Modes (Wiring Requirement)
@@ -130,7 +130,7 @@ Entry trigger:
 Behavior:
 - MP3 player plays `3.mp3`
 - After 1 second delay: PistonRelay ON for 5 seconds, then OFF
-- After 1 second delay: LightRelay ON for 20 seconds
+- After 1 second delay: LightRelay ON for 10 seconds
 
 Trigger handling:
 - Ignore additional ScarePIR triggers for the remainder of scenario cycle
@@ -148,8 +148,8 @@ Relative timing at Scare phase entry (t = 0):
 - t = 1.0s: PistonRelay ON
 - t = 6.0s: PistonRelay OFF
 - t = 1.0s: LightRelay ON
-- t = 21.0s: LightRelay OFF (end of scare phase window)
-- t = 21.0s: Return to Default phase
+- t = 11.0s: LightRelay OFF (end of scare phase window)
+- t = 11.0s: Return to Default phase
 
 Detection phase timing:
 - Detection phase timeout: 20 seconds
@@ -207,7 +207,7 @@ Assumptions captured:
 - [ ] PistonRelay turns ON 1 second after Scare phase entry
 - [ ] PistonRelay turns OFF after 5 seconds ON time
 - [ ] LightRelay turns ON 1 second after Scare phase entry
-- [ ] LightRelay remains ON for 20 seconds
+- [ ] LightRelay remains ON for 10 seconds
 - [ ] Additional ScarePIR triggers are ignored after first scare trigger
 - [ ] EyesRelay turns OFF at Scare phase exit
 - [ ] System returns to Default phase after scare phase completion

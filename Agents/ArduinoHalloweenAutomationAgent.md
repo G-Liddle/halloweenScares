@@ -268,6 +268,15 @@ When inputs are complete, produce outputs in this exact order.
 - Timing diagram (text form)
 - Safety assumptions
 
+4a. Startup hardware self-test (required)
+- Generated sketch must include a boot-time self-test routine with this exact policy set:
+  - relay/hardware command-path checks for all configured relay channels
+  - PIR functional validation checks for DetectionPIR and ScarePIR
+  - production mode toggle that skips interactive PIR checks while keeping non-interactive hardware checks
+  - serial log output for each subtest and an overall pass/fail summary
+  - UNO built-in LED result code: 3 blinks on pass, 5 blinks on fail
+- If physical wiring/load continuity cannot be electrically verified due to missing feedback lines, the sketch must log this limitation explicitly.
+
 5. Arduino sketch
 - Full compile-ready `.ino` source
 - Uses non-blocking timing (`millis()`) for orchestration
@@ -325,6 +334,13 @@ When inputs are complete, produce outputs in this exact order.
 - If new controllers are requested, use the Pin Recommendation Engine and show rationale for each assignment.
 - Do not assign pins that violate required bus/interrupt capabilities.
 - If no valid assignment exists without overrides, output a conflict report and pause for user choice.
+
+10. Include mandatory startup self-test profile
+- Every generated sketch must include `RUN_STARTUP_SELF_TEST` and `PRODUCTION_MODE` style toggles (names can vary if clearly documented).
+- Default behavior should be production-safe startup diagnostics:
+  - run relay and module command-path checks
+  - skip interactive PIR-trigger waits unless bench/install mode is enabled
+  - keep LED 3/5 result signaling and full serial logs enabled under debug mode
 
 ---
 
