@@ -128,8 +128,8 @@ void playDefaultLoop() {
 }
 
 void playDetectionTrack() {
-  mp3.play(TRACK_DETECTION);
-  logMsg(F("[MP3]"), F("Play detection track"));
+  mp3.loop(TRACK_DETECTION);
+  logMsg(F("[MP3]"), F("Loop detection track"));
 }
 
 void playScareTrack() {
@@ -205,7 +205,7 @@ void enterScareState() {
 // -------- State handlers --------
 void handleDefaultState(bool detectionEdge, bool scareEdge) {
   // Priority: ScarePIR can trigger scare regardless of phase.
-  if (scareEdge && !scareConsumed) {
+  if ((scareEdge || isPirActive(SCARE_PIR_PIN)) && !scareConsumed) {
     enterScareState();
     return;
   }
@@ -217,15 +217,18 @@ void handleDefaultState(bool detectionEdge, bool scareEdge) {
 }
 
 void handleDetectionState(bool scareEdge) {
-  if (scareEdge && !scareConsumed) {
+  // Accept both edge and active-level scare trigger while in DETECTION.
+  // This helps when PIR output is held high long enough that a clean edge is missed.
+  if ((scareEdge || isPirActive(SCARE_PIR_PIN)) && !scareConsumed) {
     enterScareState();
     return;
   }
 
   unsigned long elapsed = millis() - stateStartMs;
   if (elapsed >= DETECTION_TIMEOUT_MS) {
-    logMsg(F("[FSM]"), F("Detection timeout -> DEFAULT"));
+    logMsg(F("[FSM]"), F("Detection timeout reached -> DEFAULT"));
     enterDefaultState(true);
+    return;
   }
 }
 
