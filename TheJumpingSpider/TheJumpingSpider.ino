@@ -42,8 +42,9 @@ const unsigned long MP3_INIT_RETRY_DELAY_MS = 350UL;
 const bool MP3_REQUIRE_FEEDBACK_LINE = false;
 
 // Timing settings (ms)
-const unsigned long DETECTION_TIMEOUT_MS = 20000UL;
+const unsigned long DETECTION_TIMEOUT_MS = 12000UL;
 const unsigned long TRYME_PULSE_MS = 500UL;
+const unsigned long SCARE_RELAY2_RESTART_GAP_MS = 200UL;
 const unsigned long SCARE_RELAY1_ON_MS = 1000UL;
 const unsigned long SCARE_RELAY3_ON_MS = 10000UL;
 const unsigned long SCARE_RELAY2_RETRIGGER_AT_MS = 10000UL;
@@ -82,6 +83,8 @@ bool mp3Ready = false;
 
 bool relay2PulseActive = false;
 unsigned long relay2PulseEndMs = 0;
+bool scareRelay2RestartPulsePending = false;
+unsigned long scareRelay2RestartPulseAtMs = 0;
 
 bool scareRelay2RetriggerDone = false;
 bool scareRelay1OffDone = false;
@@ -147,6 +150,11 @@ void serviceRelay2TryMePulse() {
 void cancelRelay2PulseAndForceOff() {
   relay2PulseActive = false;
   setRelay(RELAY2_HANGING_MAN_PIN, false, F("Relay2HangingMan"));
+}
+
+void scheduleScareRelay2RestartPulse() {
+  scareRelay2RestartPulsePending = true;
+  scareRelay2RestartPulseAtMs = millis() + TRYME_PULSE_MS + SCARE_RELAY2_RESTART_GAP_MS;
 }
 
 // -------- MP3 helpers --------
@@ -344,6 +352,7 @@ bool runStartupSelfTest() {
 void enterIdle(bool resetPolicyFlags) {
   currentState = IDLE;
   stateStartMs = millis();
+  scareRelay2RestartPulsePending = false;
 
   allRelaysOff();
 
@@ -375,16 +384,28 @@ void enterMotionConfirm() {
 }
 
 void enterRunSequence() {
+  bool scareFromDetection = (currentState == MOTION_CONFIRM);
+
   currentState = RUN_SEQUENCE;
   stateStartMs = millis();
   scareConsumed = true;
+  scareRelay2RestartPulsePending = false;
   scareRelay2RetriggerDone = false;
   scareRelay1OffDone = false;
   scareRelay3OffDone = false;
 
-  // Scenario rule: if scare occurs before detection timeout,
-  // timeout retrigger is canceled and replaced by scare +10s retrigger.
+  // Detection timeout retrigger is canceled once scare begins.
   cancelRelay2PulseAndForceOff();
+
+  if (scareFromDetection) {
+    // Detection-origin scare: stop pulse, 0.2s gap after first pulse completes,
+    // then restart pulse.
+    triggerRelay2TryMePulse(F("Scare entry stop (from detection)"));
+    scheduleScareRelay2RestartPulse();
+  } else {
+    // Idle/timeout-origin scare: start hanging man at scare entry.
+    triggerRelay2TryMePulse(F("Scare entry start (from idle/timeout)"));
+  }
 
   setRelay(RELAY1_JUMPING_SPIDER_PIN, true, F("Relay1JumpingSpider"));
   setRelay(RELAY3_STROBE_PIN, true, F("Relay3Strobe120V"));
@@ -422,14 +443,19 @@ void handleMotionConfirmState(bool scareEdge) {
 
   unsigned long elapsed = millis() - stateStartMs;
   if (elapsed >= DETECTION_TIMEOUT_MS) {
-    // Timeout path: trigger hanging man again at timeout, then reset.
-    triggerRelay2TryMePulse(F("Detection timeout"));
-    enterCooldown(TRYME_PULSE_MS + COOLDOWN_MS);
+    // Timeout path: hanging man has internal 12s timeout; no retrigger command needed.
+    enterCooldown(COOLDOWN_MS);
   }
 }
 
 void handleRunSequenceState() {
   unsigned long elapsed = millis() - stateStartMs;
+
+  if (scareRelay2RestartPulsePending && !relay2PulseActive &&
+      (long)(millis() - scareRelay2RestartPulseAtMs) >= 0) {
+    triggerRelay2TryMePulse(F("Scare entry restart after stop-gap"));
+    scareRelay2RestartPulsePending = false;
+  }
 
   if (!scareRelay1OffDone && elapsed >= SCARE_RELAY1_ON_MS) {
     setRelay(RELAY1_JUMPING_SPIDER_PIN, false, F("Relay1JumpingSpider"));
@@ -441,9 +467,9 @@ void handleRunSequenceState() {
     scareRelay3OffDone = true;
   }
 
-  // Scare path: trigger hanging man after 10 seconds only.
+  // Scare path: send stop command to hanging man after 10 seconds.
   if (!scareRelay2RetriggerDone && elapsed >= SCARE_RELAY2_RETRIGGER_AT_MS) {
-    triggerRelay2TryMePulse(F("Scare +10s retrigger"));
+    triggerRelay2TryMePulse(F("Scare +10s stop command"));
     scareRelay2RetriggerDone = true;
   }
 

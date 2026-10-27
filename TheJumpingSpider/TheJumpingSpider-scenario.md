@@ -88,11 +88,10 @@ Entry trigger:
 
 Behavior:
 - MP3 player loops `002.mp3`
-- Relay2HangingMan uses Try me translation of "ON for 20 seconds":
+- Relay2HangingMan uses Try me translation of "ON for 12 seconds":
   - ON for 0.5 seconds at Detection phase entry
-  - OFF during detection window
-  - ON for 0.5 seconds at Detection +20.0 seconds if timeout path is reached
-- Relay2HangingMan returns OFF immediately after each 0.5-second pulse
+  - No second detection-timeout pulse is sent; hanging man internal timeout ends the run
+- Relay2HangingMan returns OFF immediately after the 0.5-second entry pulse
 - Relay1JumpingSpider OFF
 - Relay3Strobe120V OFF
 - Relay4Aux120V OFF
@@ -102,8 +101,8 @@ Trigger handling:
 
 Transition rules:
 - On ScarePIR trigger -> enter Scare phase
-- If no ScarePIR trigger occurs within 20 seconds -> timeout and return to Default phase
-- If Scare phase is entered before timeout, the Detection +20.0 seconds Relay2 retrigger is canceled and replaced by the Scare +10.0 seconds retrigger.
+- If no ScarePIR trigger occurs within 12 seconds -> timeout and return to Default phase
+- If Scare phase is entered before timeout, the detection timeout path is not used and Relay2 retriggers only at Scare +10.0 seconds.
 
 ### Scare phase
 Entry trigger:
@@ -112,9 +111,15 @@ Entry trigger:
 Behavior:
 - MP3 player plays `003.mp3`
 - Relay1JumpingSpider ON for 1 second, then OFF
-- Relay2HangingMan retriggers after 10 seconds in Scare phase:
-  - OFF from Scare entry until Scare +10.0 seconds
-  - ON for 0.5 seconds at Scare +10.0 seconds
+- Relay2HangingMan branch behavior at Scare entry:
+  - If Scare starts from Default phase (or after a Detection timeout cycle):
+    - ON for 0.5 seconds at Scare entry to start hanging man
+  - If Scare starts from Detection phase:
+    - ON for 0.5 seconds at Scare entry to stop hanging man
+    - Wait 0.2 seconds after the first pulse finishes
+    - ON for 0.5 seconds to restart hanging man
+- Relay2HangingMan stop command in Scare phase:
+  - ON for 0.5 seconds at Scare +10.0 seconds to stop hanging man
   - OFF after pulse
 - Relay3Strobe120V ON for 10 seconds, then OFF
 - Relay4Aux120V stays OFF until explicitly assigned in a future revision
@@ -133,18 +138,25 @@ Relative timing at Scare phase entry (t = 0):
 - t = 0.0s: Play `003.mp3`
 - t = 0.0s: Relay1JumpingSpider ON
 - t = 1.0s: Relay1JumpingSpider OFF
-- t = 0.0s: Relay2HangingMan OFF
-- t = 10.0s: Relay2HangingMan ON for 0.5 seconds (Try me retrigger pulse)
+- Relay2HangingMan branch A (Scare entered from Default or post-timeout):
+  - t = 0.0s: Relay2HangingMan ON for 0.5 seconds (start command)
+  - t = 0.5s: Relay2HangingMan OFF
+- Relay2HangingMan branch B (Scare entered from Detection):
+  - t = 0.0s: Relay2HangingMan ON for 0.5 seconds (stop command)
+  - t = 0.5s: Relay2HangingMan OFF
+  - t = 0.7s: Relay2HangingMan ON for 0.5 seconds (restart command)
+  - t = 1.2s: Relay2HangingMan OFF
+- t = 10.0s: Relay2HangingMan ON for 0.5 seconds (stop command)
 - t = 10.5s: Relay2HangingMan OFF
 - t = 0.0s: Relay3Strobe120V ON
 - t = 10.0s: Relay3Strobe120V OFF
 - t = 10.5s: Return to Default phase
 
 Detection phase timing:
-- Detection phase timeout: 20 seconds
+- Detection phase timeout: 12 seconds
 - Detection phase remains active until either:
   - ScarePIR event occurs, or
-  - 20-second timeout expires
+  - 12-second timeout expires
 
 ---
 
@@ -210,15 +222,17 @@ Mains-side relay terminal intent:
 - [ ] DetectionPIR trigger transitions system to Detection phase
 - [ ] In Detection phase, `002.mp3` is looping
 - [ ] In Detection phase, Relay2HangingMan emits Try me pulse #1 for 0.5 seconds at phase entry
-- [ ] In Detection timeout path, Relay2HangingMan emits Try me pulse #2 for 0.5 seconds at +20.0 seconds
+- [ ] In Detection timeout path, no second Relay2 command is sent; hanging man ends by internal timeout
 - [ ] Additional DetectionPIR triggers are ignored after first detection trigger
 - [ ] ScarePIR trigger transitions system to Scare phase from Default or Detection phase
-- [ ] Detection phase times out after 20 seconds if ScarePIR does not trigger
+- [ ] Detection phase times out after 12 seconds if ScarePIR does not trigger
 - [ ] In Scare phase, `003.mp3` is played
 - [ ] Relay1JumpingSpider turns ON at Scare phase entry
 - [ ] Relay1JumpingSpider turns OFF after 1 second ON time
-- [ ] In Scare phase, Relay2HangingMan stays OFF until +10.0 seconds
-- [ ] Relay2HangingMan emits a Try me retrigger pulse for 0.5 seconds at Scare +10.0 seconds
+- [ ] If Scare starts from Default (or post-timeout), Relay2HangingMan emits a 0.5-second start pulse at Scare entry
+- [ ] If Scare starts from Detection, Relay2HangingMan emits a 0.5-second stop pulse at Scare entry
+- [ ] If Scare starts from Detection, Relay2HangingMan waits 0.2 seconds after pulse completion, then emits a 0.5-second restart pulse
+- [ ] In all Scare paths, Relay2HangingMan emits a 0.5-second stop pulse at Scare +10.0 seconds
 - [ ] Relay3Strobe120V turns ON at Scare phase entry
 - [ ] Relay3Strobe120V remains ON for 10 seconds
 - [ ] Relay4Aux120V remains OFF in this revision
@@ -234,10 +248,12 @@ Mains-side relay terminal intent:
 1. Relay3 and Relay4 are treated as mains-switched channels only.
 2. Relay3 is assigned to stroboscopic light behavior in scare phase.
 3. Relay4 remains intentionally unassigned and OFF until a second mains prop is defined.
-4. Detection timeout remains 20 seconds for this scenario revision.
+4. Detection timeout remains 12 seconds for this scenario revision.
 5. Hanging man on Relay2 is Try me controlled and uses pulse translation rules.
-6. Detection phase applies Relay2 Try me translation for a 20-second window.
-7. Scare phase drives Relay1 for 1 second, Relay3 for 10 seconds, and retriggers Relay2 at +10.0 seconds.
+6. Detection phase applies a single Relay2 Try me entry pulse and relies on prop internal 12-second timeout.
+7. Scare phase drives Relay1 for 1 second and Relay3 for 10 seconds.
+8. Scare entered from Default/post-timeout sends a Relay2 start pulse at entry and a stop pulse at +10.0 seconds.
+9. Scare entered from Detection sends Relay2 stop pulse at entry, 0.2-second inter-pulse gap after pulse completion, then restart pulse, followed by stop pulse at +10.0 seconds.
 
 ---
 
