@@ -36,6 +36,10 @@ const uint8_t MP3_VOLUME = 24; // 0..30
 const uint16_t TRACK_AMBIENT = 1;
 const uint16_t TRACK_DETECTION = 2;
 const uint16_t TRACK_SCARE = 3;
+const unsigned long MP3_BOOT_DELAY_MS = 1200UL;
+const uint8_t MP3_INIT_RETRY_COUNT = 3;
+const unsigned long MP3_INIT_RETRY_DELAY_MS = 350UL;
+const bool MP3_REQUIRE_FEEDBACK_LINE = false;
 
 // Timing settings (ms)
 const unsigned long DETECTION_TIMEOUT_MS = 20000UL;
@@ -168,6 +172,48 @@ void playScareTrack() {
   }
   mp3.play(TRACK_SCARE);
   logMsg(F("[MP3]"), F("Play scare track"));
+}
+
+void initMp3() {
+  mp3Ready = false;
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[MP3] Waiting for DFPlayer boot (ms): "));
+    Serial.println(MP3_BOOT_DELAY_MS);
+  }
+  delay(MP3_BOOT_DELAY_MS);
+
+  for (uint8_t attempt = 1; attempt <= MP3_INIT_RETRY_COUNT; attempt++) {
+    mp3Serial.listen();
+
+    if (DEBUG_ENABLED) {
+      Serial.print(F("[MP3] Init attempt "));
+      Serial.print(attempt);
+      Serial.print(F("/"));
+      Serial.println(MP3_INIT_RETRY_COUNT);
+    }
+
+    if (mp3.begin(mp3Serial, MP3_REQUIRE_FEEDBACK_LINE, true)) {
+      mp3Ready = true;
+      mp3.volume(MP3_VOLUME);
+      logMsg(F("[MP3]"), F("DFPlayer ready"));
+      return;
+    }
+
+    if (DEBUG_ENABLED) {
+      Serial.println(F("[MP3] Init attempt failed"));
+    }
+
+    if (attempt < MP3_INIT_RETRY_COUNT) {
+      delay(MP3_INIT_RETRY_DELAY_MS);
+    }
+  }
+
+  if (DEBUG_ENABLED) {
+    Serial.print(F("[MP3] Feedback line required mode: "));
+    Serial.println(MP3_REQUIRE_FEEDBACK_LINE ? F("YES") : F("NO (one-wire)"));
+  }
+  logMsg(F("[MP3]"), F("DFPlayer init failed after retries; check power, RX/TX wiring, SD card"));
 }
 
 // -------- PIR helpers --------
@@ -430,14 +476,7 @@ void setup() {
   allRelaysOff();
 
   mp3Serial.begin(9600);
-  if (!mp3.begin(mp3Serial)) {
-    mp3Ready = false;
-    logMsg(F("[MP3]"), F("DFPlayer init failed; check wiring/module"));
-  } else {
-    mp3Ready = true;
-    mp3.volume(MP3_VOLUME);
-    logMsg(F("[MP3]"), F("DFPlayer ready"));
-  }
+  initMp3();
 
   if (RUN_STARTUP_SELF_TEST) {
     bool selfTestOk = runStartupSelfTest();
