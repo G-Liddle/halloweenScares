@@ -80,6 +80,8 @@ bool relay2PulseActive = false;
 unsigned long relay2PulseEndMs = 0;
 
 bool scareRelay2RetriggerDone = false;
+bool scareRelay1OffDone = false;
+bool scareRelay3OffDone = false;
 
 // -------- Logging helpers --------
 void logMsg(const __FlashStringHelper* tag, const __FlashStringHelper* msg) {
@@ -331,6 +333,8 @@ void enterRunSequence() {
   stateStartMs = millis();
   scareConsumed = true;
   scareRelay2RetriggerDone = false;
+  scareRelay1OffDone = false;
+  scareRelay3OffDone = false;
 
   // Scenario rule: if scare occurs before detection timeout,
   // timeout retrigger is canceled and replaced by scare +10s retrigger.
@@ -381,12 +385,14 @@ void handleMotionConfirmState(bool scareEdge) {
 void handleRunSequenceState() {
   unsigned long elapsed = millis() - stateStartMs;
 
-  if (elapsed >= SCARE_RELAY1_ON_MS) {
+  if (!scareRelay1OffDone && elapsed >= SCARE_RELAY1_ON_MS) {
     setRelay(RELAY1_JUMPING_SPIDER_PIN, false, F("Relay1JumpingSpider"));
+    scareRelay1OffDone = true;
   }
 
-  if (elapsed >= SCARE_RELAY3_ON_MS) {
+  if (!scareRelay3OffDone && elapsed >= SCARE_RELAY3_ON_MS) {
     setRelay(RELAY3_STROBE_PIN, false, F("Relay3Strobe120V"));
+    scareRelay3OffDone = true;
   }
 
   // Scare path: trigger hanging man after 10 seconds only.

@@ -3,7 +3,7 @@
 > **Scenario Name:** TheJumpingSpider  
 > **Mode:** Scenario Mode (specification only, no firmware output)  
 > **Board Target:** Arduino UNO R3 compatible ATmega328P  
-> **Status:** Draft
+> **Status:** Approved for Build Mode handoff (2026-10-26)
 
 ---
 
