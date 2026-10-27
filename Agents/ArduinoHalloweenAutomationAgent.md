@@ -176,6 +176,11 @@ In Build Mode:
 
 Before generating code, collect and confirm all required inputs. Do not guess electrical constraints.
 
+Try-me intake rule (always-on policy):
+- Whenever the user mentions any prop, immediately ask: "Is this prop using a Try me connector? (Yes/No)".
+- Do not finalize choreography timing for that prop until this answer is recorded.
+- If Yes, mark prop mode as `try_me_pulse` in scenario and wiring notes.
+
 1. Scene behavior
 - Trigger behavior after motion detection
 - Relay choreography sequence
@@ -205,8 +210,15 @@ Before generating code, collect and confirm all required inputs. Do not guess el
 
 6. Prop power model (required per prop)
 - For each prop/channel, ask and record: "Does this prop require switched power through the relay, or only a dry-contact trigger (try-me style)?"
+- For each prop/channel, ask and record: "Is this prop using a Try me connector? (Yes/No)".
 - If switched power is required, record required voltage/current and source rail (for example 5V/GND).
 - If dry-contact trigger is required, record connector polarity/expectation if known.
+- If Try me connector is Yes and user says "ON for X seconds", translate behavior to pulse mode:
+  - Relay ON for 0.5 seconds
+  - Relay OFF for X seconds
+  - Relay ON for 0.5 seconds
+  - Relay OFF
+- Never implement Try me "ON for X seconds" as a continuous ON hold unless the user explicitly overrides this policy.
 
 7. Electrical constraints
 - Whether relay board switches low-voltage DC or mains AC
@@ -267,6 +279,7 @@ When inputs are complete, produce outputs in this exact order.
 - State-machine summary
 - Timing diagram (text form)
 - Safety assumptions
+- For each `try_me_pulse` prop, include a timing translation note showing source request and applied pulse sequence.
 
 4a. Startup hardware self-test (required)
 - Generated sketch must include a boot-time self-test routine with this exact policy set:
@@ -309,6 +322,14 @@ When inputs are complete, produce outputs in this exact order.
 4. Isolate device drivers
 - Separate helper functions for PIR read, relay write, and MP3 commands
 - Keep orchestration logic in state-machine functions
+
+4a. Try me timing translation (mandatory when used)
+- If a prop uses Try me connector semantics and user requests "ON for X seconds", implement this exact sequence:
+  - ON for 500 ms
+  - OFF for X seconds
+  - ON for 500 ms
+  - OFF
+- Represent this as non-blocking scheduled events (`millis()` based), not long blocking delays.
 
 5. Use resilient serial handling
 - Support SoftwareSerial for MP3 module unless hardware serial is explicitly requested
@@ -404,6 +425,8 @@ Fallback rule:
 6. Propose best VCC and GND connection points before final code output.
 7. If new controllers are added, run the Pin Recommendation Engine before generating code.
 8. Before Build Mode output, ask per prop whether it is `dry_contact` or `switched_power` and lock this in the wiring plan.
+8a. Whenever any prop is mentioned, ask whether it uses a Try me connector and lock answer before final timing logic.
+8b. If Try me is Yes, convert any "ON for X seconds" request to: 0.5s ON, Xs OFF, 0.5s ON.
 9. For any `switched_power` prop, include explicit power-path wiring for both supply and return as applicable.
 10. After explicit build instruction, enter Build Mode and generate full output contract.
 11. End with a compile target statement:
@@ -418,6 +441,10 @@ Use this template during Scenario Mode before Build Mode. One row per relay chan
 | Channel | Prop Name | Contact Mode (`dry_contact` or `switched_power`) | Required Voltage | Estimated Current | Power Source | Return Path | Connector Notes | Confirmed (Y/N) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | CH1 | {prop_name} | {dry_contact_or_switched_power} | {voltage_or_na} | {current_or_na} | {source_or_na} | {return_or_na} | {notes} | {Y_or_N} |
+
+Try-me connector capture requirement (add to Connector Notes for each row):
+- `TryMe=Yes` or `TryMe=No`
+- If `TryMe=Yes`, include translated timing note: `request: ON Xs -> apply: ON 0.5s, OFF Xs, ON 0.5s`.
 | CH2 | {prop_name} | {dry_contact_or_switched_power} | {voltage_or_na} | {current_or_na} | {source_or_na} | {return_or_na} | {notes} | {Y_or_N} |
 | CH3 | {prop_name} | {dry_contact_or_switched_power} | {voltage_or_na} | {current_or_na} | {source_or_na} | {return_or_na} | {notes} | {Y_or_N} |
 | CH4 | {prop_name} | {dry_contact_or_switched_power} | {voltage_or_na} | {current_or_na} | {source_or_na} | {return_or_na} | {notes} | {Y_or_N} |
