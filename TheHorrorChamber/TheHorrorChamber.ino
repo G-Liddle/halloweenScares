@@ -45,13 +45,12 @@ unsigned long stateStartMs = 0;
 bool scareConsumed = false;
 bool startupSelfTestPassed = false;
 
-bool relay4ScareActive = false;
-
 bool prevScarePir = false;
 
 TryMePulse relay1Pulse = {false, 0};
 TryMePulse relay2Pulse = {false, 0};
 TryMePulse relay3Pulse = {false, 0};
+TryMePulse relay4Pulse = {false, 0};
 
 void logMsg(const __FlashStringHelper* tag, const __FlashStringHelper* msg) {
   if (!DEBUG_ENABLED) {
@@ -196,12 +195,11 @@ void enterDefaultState(bool resetPolicyFlags) {
   currentState = STATE_DEFAULT;
   stateStartMs = millis();
 
-  relay4ScareActive = false;
-
   allRelaysOff();
   relay1Pulse.active = false;
   relay2Pulse.active = false;
   relay3Pulse.active = false;
+  relay4Pulse.active = false;
 
   if (resetPolicyFlags) {
     scareConsumed = false;
@@ -216,11 +214,11 @@ void enterScareState() {
   stateStartMs = millis();
 
   scareConsumed = true;
-  relay4ScareActive = false;
 
   startTryMePulse(RELAY1_PIN, relay1Pulse, F("Relay1Prisoner"), F("Scare entry trigger"));
   startTryMePulse(RELAY2_PIN, relay2Pulse, F("Relay2Dog"), F("Scare entry trigger"));
   startTryMePulse(RELAY3_PIN, relay3Pulse, F("Relay3Triceratops"), F("Scare entry trigger"));
+  startTryMePulse(RELAY4_PIN, relay4Pulse, F("Relay4Ghost"), F("Scare entry trigger"));
 
   logMsg(F("[FSM]"), F("Enter SCARE"));
 }
@@ -229,12 +227,11 @@ void enterCooldownState() {
   currentState = STATE_COOLDOWN;
   stateStartMs = millis();
 
-  relay4ScareActive = false;
-
   allRelaysOff();
   relay1Pulse.active = false;
   relay2Pulse.active = false;
   relay3Pulse.active = false;
+  relay4Pulse.active = false;
 
   logMsg(F("[FSM]"), F("Enter COOLDOWN (10s retrigger lockout)"));
 }
@@ -248,14 +245,7 @@ void handleDefaultState(bool scareEdge) {
 void handleScareState() {
   unsigned long elapsed = millis() - stateStartMs;
 
-  if (!relay4ScareActive) {
-    setRelayNamed(RELAY4_PIN, true, F("Relay4Ghost"));
-    relay4ScareActive = true;
-  }
-
   if (elapsed >= SCARE_DURATION_MS) {
-    setRelayNamed(RELAY4_PIN, false, F("Relay4Ghost"));
-    relay4ScareActive = false;
     logMsg(F("[FSM]"), F("Scare complete -> COOLDOWN"));
     enterCooldownState();
   }
@@ -303,6 +293,7 @@ void loop() {
   serviceTryMePulse(RELAY1_PIN, relay1Pulse, F("Relay1Prisoner"));
   serviceTryMePulse(RELAY2_PIN, relay2Pulse, F("Relay2Dog"));
   serviceTryMePulse(RELAY3_PIN, relay3Pulse, F("Relay3Triceratops"));
+  serviceTryMePulse(RELAY4_PIN, relay4Pulse, F("Relay4Ghost"));
 
   if (!startupSelfTestPassed) {
     allRelaysOff();

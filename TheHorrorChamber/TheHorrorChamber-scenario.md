@@ -29,13 +29,13 @@ Primary user experience intent:
 - Relay1Prisoner: hanging prisoner, Try me button path
 - Relay2Dog: barking dog, Try me button path
 - Relay3Triceratops: triceratops, Try me button path
-- Relay4Ghost: hanging ghost, on-off switch path
+- Relay4Ghost: hanging ghost, Try me button path
 
 ### Relay Electrical Modes
 - Relay1Prisoner: `dry_contact` with `try_me_pulse` behavior
 - Relay2Dog: `dry_contact` with `try_me_pulse` behavior
 - Relay3Triceratops: `dry_contact` with `try_me_pulse` behavior
-- Relay4Ghost: `switched_power` with fixed-duration ON window
+- Relay4Ghost: `dry_contact` with `try_me_pulse` behavior
 
 ### Audio Policy
 - No audio output is used in this scenario.
@@ -79,8 +79,9 @@ Behavior baseline:
   - ON for 0.5 seconds, then OFF
 - Relay3Triceratops trigger command pulse (Try me translation):
   - ON for 0.5 seconds, then OFF
-- Relay4Ghost ON at scare entry, remains ON for 10.0 seconds, then OFF
-- Relay1Prisoner, Relay2Dog, and Relay3Triceratops are not force-stopped by firmware after pulse; each prop may run to its own internal timeout normally
+- Relay4Ghost trigger command pulse (Try me translation):
+  - ON for 0.5 seconds, then OFF
+- Relay1Prisoner, Relay2Dog, Relay3Triceratops, and Relay4Ghost are not force-stopped by firmware after pulse; each prop may run to its own internal timeout normally
 
 Scare duration:
 - Fixed 10.0-second scare window
@@ -114,8 +115,8 @@ Relative timing at Scare phase entry (t = 0):
 - t = 0.5s: Relay2Dog OFF
 - t = 0.0s: Relay3Triceratops ON for 0.5 seconds
 - t = 0.5s: Relay3Triceratops OFF
-- t = 0.0s: Relay4Ghost ON
-- t = 10.0s: Relay4Ghost OFF
+- t = 0.0s: Relay4Ghost ON for 0.5 seconds
+- t = 0.5s: Relay4Ghost OFF
 - t = 10.0s: Enter Cooldown phase
 - t = 20.0s: Return to Default phase
 
@@ -182,7 +183,7 @@ Prop-side relay terminal mapping:
 11. Relay1Prisoner Try me wire A -> CH1 COM, Try me wire B -> CH1 NO.
 12. Relay2Dog Try me wire A -> CH2 COM, Try me wire B -> CH2 NO.
 13. Relay3Triceratops Try me wire A -> CH3 COM, Try me wire B -> CH3 NO.
-14. Relay4Ghost switched path: source feed -> CH4 COM, CH4 NO -> ghost switched input path, return path remains direct.
+14. Relay4Ghost Try me wire A -> CH4 COM, Try me wire B -> CH4 NO.
 15. Do not route mains voltage through breadboard rails; breadboard rails are low-voltage distribution only.
 
 ---
@@ -195,8 +196,7 @@ Prop-side relay terminal mapping:
 - [ ] Relay1Prisoner receives one 0.5-second trigger pulse at scare entry
 - [ ] Relay2Dog receives one 0.5-second trigger pulse at scare entry
 - [ ] Relay3Triceratops receives one 0.5-second trigger pulse at scare entry
-- [ ] Relay4Ghost turns ON at Scare entry and remains ON for 10.0 seconds
-- [ ] Relay4Ghost turns OFF at +10.0 seconds
+- [ ] Relay4Ghost receives one 0.5-second trigger pulse at scare entry
 - [ ] Scare phase duration is fixed at 10.0 seconds
 - [ ] Additional scare triggers are ignored while Scare phase is active
 - [ ] After Scare phase, system enters a 10.0-second cooldown lockout
@@ -221,11 +221,11 @@ None at this time. Intake answers are complete for behavior and timing.
 3. Relay1Prisoner is hanging prisoner and uses Try me style pulse semantics.
 4. Relay2Dog is barking dog and uses Try me style pulse semantics.
 5. Relay3Triceratops is triceratops and uses Try me style pulse semantics.
-6. Relay4Ghost is hanging ghost and is controlled as an on-off switch path.
+6. Relay4Ghost is hanging ghost and uses Try me style pulse semantics.
 7. Scare trigger source is PIR (ScarePIR) on UNO `A5`.
 8. Scare phase duration is fixed at 10.0 seconds.
-9. Relay4Ghost is ON during the full 10.0-second Scare phase and OFF at Scare exit.
-10. Relay1Prisoner, Relay2Dog, and Relay3Triceratops are Try me pulse triggers and then run to internal timeout naturally.
+9. Relay4Ghost receives one Try me pulse at Scare entry (0.5 seconds ON, then OFF).
+10. Relay1Prisoner, Relay2Dog, Relay3Triceratops, and Relay4Ghost are Try me pulse triggers and then run to internal timeout naturally.
 11. Post-scare cooldown lockout is required and set to 10.0 seconds.
 12. Startup self-test lockout is mandatory.
 13. No audio output is used in this scenario.
