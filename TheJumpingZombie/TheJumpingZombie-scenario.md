@@ -135,7 +135,20 @@ Trigger handling:
 - Ignore additional ScarePIR triggers for the remainder of scenario cycle
 
 Exit rule:
-- Once scare phase sequence is complete, return to Default phase
+- Once scare phase sequence is complete, enter 10-second Cooldown lockout phase
+
+### Cooldown phase
+Entry trigger:
+- Entered automatically when Scare phase sequence completes
+
+Behavior:
+- Duration is 10 seconds
+- All relays remain OFF during cooldown
+- Ignore DetectionPIR and ScarePIR triggers during cooldown lockout
+- Ambient audio may resume during cooldown, but no phase transitions are allowed
+
+Exit rule:
+- After 10 seconds, return to Default phase and reset trigger-consumed flags
 
 ---
 
@@ -155,7 +168,8 @@ Relative timing at Scare phase entry (t = 0):
 - Branch B (Scare entered from Detection):
   - No additional Relay2SecondaryEffect trigger command in Scare phase
   - No additional Relay4Aux trigger command in Scare phase
-- t = 3.0s: Return to Default phase
+- t = 3.0s: Enter Cooldown phase
+- t = 13.0s: Return to Default phase
 
 Detection phase timing:
 - Detection phase timeout: 20 seconds
@@ -197,7 +211,7 @@ ScarePIR policy:
 
 Reset point:
 - Policies reset when system returns to Default phase after:
-  - scare completion, or
+  - cooldown completion after scare, or
   - detection timeout
 
 ---
@@ -233,11 +247,15 @@ Low-voltage rails and control wiring:
 12. UNO `D10`/`D11` -> DFPlayer serial pins; DFPlayer power to 5V/GND rails.
 
 Prop-side relay terminal mapping:
-13. Relay1MainActuator (piston switched-power): supply line feed -> CH1 COM, CH1 NO -> piston power input line.
-14. Relay2SecondaryEffect (hanging man Try me): Try me wire A -> CH2 COM, Try me wire B -> CH2 NO.
-15. Relay3LightingOrFX (strobe mains path): mains line feed -> CH3 COM, CH3 NO -> strobe line input.
-16. Relay4Aux (ghost Try me): Try me wire A -> CH4 COM, Try me wire B -> CH4 NO.
-17. Relay1MainActuator Option A confirmed: piston ground stays directly connected to system ground (no relay-switched ground path).
+13. Relay1MainActuator (piston switched-power), exact breadboard path:
+  - Breadboard +5V rail -> CH1 COM.
+  - CH1 NO -> piston +V input.
+  - Piston GND -> breadboard GND rail.
+14. Relay1MainActuator Option A confirmed: piston ground stays directly connected to system ground (no relay-switched ground path).
+15. Relay2SecondaryEffect (hanging man Try me): Try me wire A -> CH2 COM, Try me wire B -> CH2 NO.
+16. Relay3LightingOrFX (strobe mains path): mains line feed -> CH3 COM, CH3 NO -> strobe line input.
+17. Relay4Aux (ghost Try me): Try me wire A -> CH4 COM, Try me wire B -> CH4 NO.
+18. Do not connect mains voltage to the breadboard rails; breadboard rails are low-voltage control/power distribution only.
 
 ---
 
@@ -261,7 +279,9 @@ Prop-side relay terminal mapping:
 - [ ] If Scare starts from Detection, no additional Scare-phase trigger command is sent to Relay2SecondaryEffect
 - [ ] If Scare starts from Detection, no additional Scare-phase trigger command is sent to Relay4Aux
 - [ ] Additional ScarePIR triggers are ignored after first scare trigger
-- [ ] System returns to Default phase after scare phase completion
+- [ ] After Scare phase, system enters a 10-second cooldown lockout before returning to Default
+- [ ] During cooldown lockout, DetectionPIR and ScarePIR triggers are ignored
+- [ ] After cooldown completes, system returns to Default and normal trigger policy resumes
 - [ ] After reset, all relays are OFF and ambient looping resumes
 - [ ] Startup self-test runs once at boot before normal phase execution
 - [ ] If startup self-test fails, all relays remain OFF and choreography is blocked until reset/restart
@@ -287,6 +307,7 @@ Prop-side relay terminal mapping:
 14. Scare phase plays `003.mp3` and triggers Relay2/Relay4 only if Detection was not triggered in the current cycle.
 15. Relay1MainActuator uses Option A single-line switched feed (positive feed switched; ground unswitched).
 16. Relay3LightingOrFX is confirmed `switched_mains` and must follow explicit mains safety constraints.
+17. After Scare phase completion, a 10-second cooldown lockout is required before Default can accept new triggers.
 
 ---
 

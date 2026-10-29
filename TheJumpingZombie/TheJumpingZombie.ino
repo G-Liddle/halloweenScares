@@ -36,6 +36,7 @@ const unsigned long TRY_ME_PULSE_MS = 500UL;
 const unsigned long DETECTION_RELAY2_RESTART_AT_MS = 8000UL;
 const unsigned long DETECTION_TIMEOUT_MS = 20000UL;
 const unsigned long SCARE_RELAY_ON_MS = 3000UL;
+const unsigned long COOLDOWN_MS = 10000UL;
 
 // MP3 init reliability
 const unsigned long MP3_BOOT_DELAY_MS = 1200UL;
@@ -54,7 +55,8 @@ DFRobotDFPlayerMini mp3;
 enum PhaseState {
   STATE_DEFAULT,
   STATE_DETECTION,
-  STATE_SCARE
+  STATE_SCARE,
+  STATE_COOLDOWN
 };
 
 enum AudioMode {
@@ -364,6 +366,22 @@ void enterScareState(bool enteredFromDetection) {
   logMsg(F("[FSM]"), F("Enter SCARE"));
 }
 
+void enterCooldownState() {
+  currentState = STATE_COOLDOWN;
+  stateStartMs = millis();
+
+  relay1ScareActive = false;
+  relay3ScareActive = false;
+
+  allRelaysOff();
+  relay2Pulse.active = false;
+  relay4Pulse.active = false;
+
+  // Keep ambient loop during lockout window while triggers remain consumed.
+  playAudioMode(AUDIO_DEFAULT_LOOP);
+  logMsg(F("[FSM]"), F("Enter COOLDOWN (10s retrigger lockout)"));
+}
+
 void handleDefaultState(bool detectionEdge, bool scareEdge) {
   if ((scareEdge || isPirActive(SCARE_PIR_PIN)) && !scareConsumed) {
     enterScareState(false);
@@ -427,7 +445,22 @@ void handleScareState() {
   }
 
   if (elapsed >= SCARE_RELAY_ON_MS) {
-    logMsg(F("[FSM]"), F("Scare complete -> DEFAULT"));
+    logMsg(F("[FSM]"), F("Scare complete -> COOLDOWN"));
+    enterCooldownState();
+  }
+}
+
+void handleCooldownState(bool detectionEdge, bool scareEdge) {
+  if (detectionEdge) {
+    logMsg(F("[COOLDOWN]"), F("DetectionPIR trigger ignored during lockout"));
+  }
+  if (scareEdge) {
+    logMsg(F("[COOLDOWN]"), F("ScarePIR trigger ignored during lockout"));
+  }
+
+  unsigned long elapsed = millis() - stateStartMs;
+  if (elapsed >= COOLDOWN_MS) {
+    logMsg(F("[FSM]"), F("Cooldown complete -> DEFAULT"));
     enterDefaultState(true);
   }
 }
@@ -493,6 +526,9 @@ void loop() {
       break;
     case STATE_SCARE:
       handleScareState();
+      break;
+    case STATE_COOLDOWN:
+      handleCooldownState(detectionEdge, scareEdge);
       break;
     default:
       enterDefaultState(true);
